@@ -1,13 +1,25 @@
-name: 'Wait'
-description: 'Wait a designated number of milliseconds'
+name: "1.21 Gigawatts"
+description: "Injects into Flux Capacitor"
 inputs:
-  milliseconds:  # id of input
-    description: 'number of milliseconds to wait'
-    required: true
-    default: '1000'
-outputs:
-  time: # output will be available to future steps
-    description: 'The current time after waiting'
+    endpoint:
+        description: "Flux Capacitor API endpoint"
+        required: true
+    token:
+        description: "Flux Capacitor API token"
+        required: true
+    file:
+        description: "Location of the Fluxfile to inject"
+        required: true
+        default: "./Fluxfile"
+    timeout:
+        description:
+            "How long before the deployment is considered as failed (seconds)"
+        required: true
+        default: "1800"
+    branch:
+        description: "Branch to deploy"
+        required: false
+        default: ""
 runs:
-  using: 'node16'
-  main: 'dist/index.js'
+    using: "node16"
+    main: "dist/index.js"

@@ -48,43 +48,41 @@ function createProgressBar(percentage, length = 50) {
 }
 
 function deploy({ endpoint, token, file, timeout, branch }) {
-    return new Promise((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-            console.log(
-                `\x1b[31m\x1b[1mTimeout after ${Math.round(
-                    timeout / 60000
-                )} minutes.\x1b[0m`
-            );
-            socket.close();
-            reject(new Error("Timeout"));
-        }, timeout * 1000);
+    let lastStep = "";
+    let lastStepProgress = null;
+    let lastSubStepProgress = null;
+    let fluxfile = null;
+    let timeoutId = null;
+    let socket = null;
+    let reject;
+    let resolve;
+    let deploymentId = null;
+    let isDone = false;
 
-        let fluxfile;
-
-        try {
-            fluxfile = fs.readFileSync(file, "utf-8");
-        } catch (e) {
-            console.log(`\x1b[31m\x1b[1mError reading file ${file}.\x1b[0m`);
-            reject(e);
-        }
-
+    function hookUpSocket() {
         const wsEndpoint = wsJoin(endpoint, "/back/ws/deploy/");
-        const socket = new ws(wsEndpoint);
+        socket = new ws(wsEndpoint);
 
         socket.on("open", function open() {
-            socket.send(
-                JSON.stringify({
-                    action: "deploy",
-                    token,
-                    branch,
-                    fluxfile,
-                })
-            );
+            if (!deploymentId) {
+                socket.send(
+                    JSON.stringify({
+                        action: "deploy",
+                        token,
+                        branch,
+                        fluxfile,
+                    })
+                );
+            } else {
+                socket.send(
+                    JSON.stringify({
+                        action: "follow",
+                        token,
+                        deployment_id: deploymentId,
+                    })
+                );
+            }
         });
-
-        let lastStep = "";
-        let lastStepProgress = null;
-        let lastSubStepProgress = null;
 
         socket.on("message", function incoming(data) {
             const message = JSON.parse(data);
@@ -135,15 +133,54 @@ function deploy({ endpoint, token, file, timeout, branch }) {
 
                 if (message.data.is_done) {
                     clearTimeout(timeoutId);
+                    isDone = true;
                     socket.close();
                     resolve(message.data.status === "success");
                 }
+            } else if (message.type === "set_id") {
+                deploymentId = message.data.deployment_id;
             }
         });
 
         socket.on("error", function error(err) {
             reject(err);
         });
+
+        socket.on("close", function () {
+            if (!isDone) {
+                setTimeout(() => {
+                    hookUpSocket();
+                }, 1000);
+            }
+        });
+    }
+
+    return new Promise((_resolve, _reject) => {
+        resolve = _resolve;
+        reject = _reject;
+
+        timeoutId = setTimeout(() => {
+            console.log(
+                `\x1b[31m\x1b[1mTimeout after ${Math.round(
+                    timeout / 60000
+                )} minutes.\x1b[0m`
+            );
+
+            if (socket) {
+                socket.close();
+            }
+
+            reject(new Error("Timeout"));
+        }, timeout * 1000);
+
+        try {
+            fluxfile = fs.readFileSync(file, "utf-8");
+        } catch (e) {
+            console.log(`\x1b[31m\x1b[1mError reading file ${file}.\x1b[0m`);
+            return reject(e);
+        }
+
+        hookUpSocket();
     });
 }
 

@@ -89,6 +89,8 @@ function deploy({ endpoint, token, file, timeout, branch }) {
         });
 
         let lastStep = "";
+        let lastStepProgress = null;
+        let lastSubStepProgress = null;
 
         socket.on("message", function incoming(data) {
             const message = JSON.parse(data);
@@ -102,26 +104,39 @@ function deploy({ endpoint, token, file, timeout, branch }) {
                     core.startGroup(message.data.step);
                     lastStep = message.data.step;
                 }
-                console.log(
-                    `\x1b[34m\x1b[1mStep progress:\x1b[0m \x1b[32m${createProgressBar(
-                        message.data.progress.step
-                    )} ${Math.round(message.data.progress.step * 100)}%\x1b[0m`
-                );
-                console.log(
-                    `\x1b[34m\x1b[1mSub-step progress:\x1b[0m \x1b[32m${createProgressBar(
-                        message.data.progress.sub_step
-                    )} ${Math.round(
-                        message.data.progress.sub_step * 100
-                    )}%\x1b[0m\n`
-                );
+
+                if (message.data.progress.step !== lastStepProgress) {
+                    console.log(
+                        `\x1b[34m\x1b[1mStep progress:    \x1b[0m \x1b[32m${createProgressBar(
+                            message.data.progress.step
+                        )} ${Math.round(
+                            message.data.progress.step * 100
+                        )}%\x1b[0m`
+                    );
+                    lastStepProgress = message.data.progress.step;
+                }
+
+                if (message.data.progress.sub_step !== lastSubStepProgress) {
+                    console.log(
+                        `\x1b[34m\x1b[1mSub-step progress:\x1b[0m \x1b[32m${createProgressBar(
+                            message.data.progress.sub_step
+                        )} ${Math.round(
+                            message.data.progress.sub_step * 100
+                        )}%\x1b[0m`
+                    );
+                    lastSubStepProgress = message.data.progress.sub_step;
+                }
 
                 for (const [component, logs] of Object.entries(
                     message.data.logs
                 )) {
+                    const buf = Buffer.from(logs, "base64");
+                    console.log(`\n\x1b[33m\x1b[1m ╓───\x1b[0m`);
                     console.log(
-                        `\x1b[33m\x1b[1mComponent: ${component}\x1b[0m`
+                        `\x1b[33m\x1b[1m ║ \x1b[0m\x1b[33mLogs for: \x1b[1m${component}\x1b[0m`
                     );
-                    console.log(logs);
+                    console.log(`\x1b[33m\x1b[1m ╙───\x1b[0m\n`);
+                    fs.writeSync(process.stdout.fd, buf, 0, buf.length);
                 }
 
                 if (message.data.is_done) {

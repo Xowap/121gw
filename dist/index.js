@@ -90,6 +90,8 @@ function displayHeader(level, text) {
 }
 
 function deploy({ endpoint, token, file, timeout, branch }) {
+    colors.enable();
+
     let lastStep = "";
     let lastStepProgress = null;
     let lastSubStepProgress = null;

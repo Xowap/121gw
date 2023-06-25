@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const ws = require("ws");
 const core = require("@actions/core");
+const colors = require("colors");
 
 /**
  * That's taken from the Node docs because the function which does that in the
@@ -47,6 +48,41 @@ function createProgressBar(percentage, length = 50) {
     return filled + empty;
 }
 
+/**
+ * Displays a progress bar with a label.
+ *
+ * @param label
+ * @param progress
+ */
+function displayProgressBar(label, progress) {
+    console.log(
+        colors.blue.bold(label.padEnd(20, " ") + ":") +
+            colors.green(
+                `${createProgressBar(progress)} ${Math.round(progress * 100)}%`
+            )
+    );
+}
+
+/**
+ * Displays a header with a text.
+ *
+ * @param level Level 1 is a big header and level 2 is a smaller one
+ * @param text Text to put in the header
+ */
+function displayHeader(level, text) {
+    const level1Chars = ["┏", "━", "┗", "┃"];
+    const level2Chars = ["╔", "═", "╚", "║"];
+    const [startChar, lineChar, endChar, textChar] =
+        level === 1 ? level1Chars : level2Chars;
+    const colorFunc = level === 1 ? colors.yellow.bold : colors.cyan.bold;
+
+    console.log("");
+    console.log(colorFunc(`${startChar}${lineChar.repeat(3)}`));
+    console.log(colorFunc(`${textChar} ${text}`));
+    console.log(colorFunc(`${endChar}${lineChar.repeat(3)}`));
+    console.log("");
+}
+
 function deploy({ endpoint, token, file, timeout, branch }) {
     let lastStep = "";
     let lastStepProgress = null;
@@ -89,28 +125,27 @@ function deploy({ endpoint, token, file, timeout, branch }) {
 
             if (message.type === "update") {
                 if (message.data.step !== lastStep) {
+                    if (lastStep) {
+                        core.endGroup();
+                    }
+
                     core.startGroup(message.data.step);
+                    displayHeader(1, message.data.step);
                     lastStep = message.data.step;
                 }
 
                 if (message.data.progress.step !== lastStepProgress) {
-                    console.log(
-                        `\x1b[34m\x1b[1mStep progress:    \x1b[0m \x1b[32m${createProgressBar(
-                            message.data.progress.step
-                        )} ${Math.round(
-                            message.data.progress.step * 100
-                        )}%\x1b[0m`
+                    displayProgressBar(
+                        "Step progress",
+                        message.data.progress.step
                     );
                     lastStepProgress = message.data.progress.step;
                 }
 
                 if (message.data.progress.sub_step !== lastSubStepProgress) {
-                    console.log(
-                        `\x1b[34m\x1b[1mSub-step progress:\x1b[0m \x1b[32m${createProgressBar(
-                            message.data.progress.sub_step
-                        )} ${Math.round(
-                            message.data.progress.sub_step * 100
-                        )}%\x1b[0m`
+                    displayProgressBar(
+                        "Sub-step progress",
+                        message.data.progress.sub_step
                     );
                     lastSubStepProgress = message.data.progress.sub_step;
                 }
@@ -119,11 +154,7 @@ function deploy({ endpoint, token, file, timeout, branch }) {
                     message.data.logs
                 )) {
                     const buf = Buffer.from(logs, "base64");
-                    console.log(`\n\x1b[33m\x1b[1m ╓───\x1b[0m`);
-                    console.log(
-                        `\x1b[33m\x1b[1m ║ \x1b[0m\x1b[33mLogs for: \x1b[1m${component}\x1b[0m`
-                    );
-                    console.log(`\x1b[33m\x1b[1m ╙───\x1b[0m\n`);
+                    displayHeader(2, component);
                     fs.writeSync(process.stdout.fd, buf, 0, buf.length);
                 }
 

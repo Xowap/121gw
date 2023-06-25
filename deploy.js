@@ -1,7 +1,6 @@
 const fs = require("node:fs");
 const ws = require("ws");
 const core = require("@actions/core");
-const { differenceInSeconds } = require("date-fns");
 
 /**
  * That's taken from the Node docs because the function which does that in the
@@ -59,27 +58,10 @@ function deploy({ endpoint, token, file, timeout, branch }) {
     let resolve;
     let deploymentId = null;
     let isDone = false;
-    let lastUpdate = new Date();
 
     function hookUpSocket() {
         const wsEndpoint = wsJoin(endpoint, "/back/ws/deploy/");
         socket = new ws(wsEndpoint);
-
-        const watchdog = setInterval(() => {
-            if (differenceInSeconds(new Date(), lastUpdate) > 10) {
-                console.log(
-                    `\x1b[31m\x1b[1mWatchdog detected a stall, reconnecting\x1b[0m`
-                );
-
-                if (socket) {
-                    socket.close();
-                    socket = null;
-                }
-
-                clearInterval(watchdog);
-                hookUpSocket();
-            }
-        });
 
         socket.on("open", function open() {
             if (!deploymentId) {
@@ -103,7 +85,6 @@ function deploy({ endpoint, token, file, timeout, branch }) {
         });
 
         socket.on("message", function incoming(data) {
-            lastUpdate = new Date();
             const message = JSON.parse(data);
 
             if (message.type === "update") {

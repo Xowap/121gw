@@ -164,6 +164,7 @@ function deploy({ endpoint, token, file, timeout, branch }) {
                     socket.close();
                     socket = null;
                     resolve(message.data.status === "success");
+                    core.endGroup();
                 }
             } else if (message.type === "set_id") {
                 deploymentId = message.data.deployment_id;

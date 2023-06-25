@@ -77,9 +77,9 @@ function displayHeader(level, text) {
     const colorFunc = level === 1 ? colors.yellow.bold : colors.cyan.bold;
 
     console.log("");
-    console.log(colorFunc(`${startChar}${lineChar.repeat(3)}`));
-    console.log(colorFunc(`${textChar} ${text}`));
-    console.log(colorFunc(`${endChar}${lineChar.repeat(3)}`));
+    console.log(colorFunc(` ${startChar}${lineChar.repeat(3)}`));
+    console.log(colorFunc(` ${textChar} ${text}`));
+    console.log(colorFunc(` ${endChar}${lineChar.repeat(3)}`));
     console.log("");
 }
 

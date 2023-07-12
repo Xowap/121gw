@@ -30,6 +30,8 @@
     "colors": "^1.4.0",
     "prettier": "^2.8.8",
     "ws": "^8.13.0",
+    "yaml": "^1.10.2",
+    "yaml-source-map": "^2.1.1",
     "yargs": "^17.7.2"
   },
   "devDependencies": {

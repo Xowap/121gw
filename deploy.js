@@ -97,6 +97,19 @@ function deploy({ endpoint, token, file, timeout, branch }) {
     let deploymentId = null;
     let isDone = false;
 
+    function makeYamlDoc() {
+        const YAML = require("yaml");
+        const YAMLSourceMap = require("yaml-source-map");
+
+        const sourceMap = new YAMLSourceMap();
+        const document = sourceMap.index(
+            YAML.parseDocument(fluxfile, { keepCstNodes: true }),
+            { filename: file }
+        );
+
+        return { sourceMap, document };
+    }
+
     function hookUpSocket() {
         const wsEndpoint = wsJoin(endpoint, "/back/ws/deploy/");
         socket = new ws(wsEndpoint);
@@ -170,6 +183,34 @@ function deploy({ endpoint, token, file, timeout, branch }) {
                 }
             } else if (message.type === "set_id") {
                 deploymentId = message.data.deployment_id;
+            } else if (message.type === "error") {
+                const { error, details } = message;
+
+                if (error) {
+                    console.log(colors.white.bgRed.bold(error));
+                }
+
+                if (details && details.length) {
+                    const { sourceMap, document } = makeYamlDoc();
+
+                    for (const { message, path } of details) {
+                        const loc = sourceMap.lookup(path, document);
+                        core.error(message, {
+                            title: "Fluxfile",
+                            startLine: loc.start.line,
+                            endLine: loc.end.line,
+                            startColumn: loc.start.col,
+                            endColumn: loc.end.col,
+                        });
+                    }
+                }
+
+                isDone = true;
+                clearTimeout(timeoutId);
+                core.endGroup();
+                socket.close();
+                socket = null;
+                resolve(false);
             }
         });
 

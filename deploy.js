@@ -210,7 +210,10 @@ function deploy({ endpoint, token, file, timeout, branch }) {
                 core.endGroup();
                 socket.close();
                 socket = null;
-                resolve(false);
+
+                const throwErr = new Error(error | "Could not deploy");
+                throwErr.noDisplay = true;
+                reject(throwErr);
             }
         });
 

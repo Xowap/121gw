@@ -43,7 +43,10 @@ async function main() {
             branch: argv.branch,
         });
     } catch (error) {
-        console.error(error);
+        if (!error.noDisplay) {
+            console.error(error);
+        }
+
         process.exit(1);
     }
 }

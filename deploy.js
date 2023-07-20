@@ -1,38 +1,8 @@
 const fs = require("node:fs");
-const ws = require("ws");
 const core = require("@actions/core");
 const colors = require("colors");
-
-/**
- * That's taken from the Node docs because the function which does that in the
- * Node library is deprecated in favor of copy/pasting this code into your code
- * for no apparent reason. Really what is wrong with JS?
- *
- * @param from Base URL
- * @param to Relative URL
- * @returns {string}
- */
-function urljoin(from, to) {
-    const resolvedUrl = new URL(to, new URL(from, "resolve://"));
-
-    if (resolvedUrl.protocol === "resolve:") {
-        const { pathname, search, hash } = resolvedUrl;
-        return pathname + search + hash;
-    }
-
-    return resolvedUrl.toString();
-}
-
-/**
- * Joining a base URL and a path to get a WebSocket URL.
- *
- * @param base Base URL to join
- * @param path Path to append
- * @returns {string}
- */
-function wsJoin(base, path) {
-    return urljoin(base, path).replace(/^http/, "ws");
-}
+const { PromSock } = require("./prom-sock");
+const { runBefore } = require("./time");
 
 /**
  * Making a nice progress bar to display the progress of things.
@@ -83,185 +53,148 @@ function displayHeader(level, text) {
     console.log("");
 }
 
-function deploy({ endpoint, token, file, timeout, branch }) {
-    colors.enable();
+function readFluxFile(file) {
+    return fs.readFileSync(file, "utf-8");
+}
 
-    let lastStep = "";
-    let lastStepProgress = null;
-    let lastSubStepProgress = null;
-    let fluxfile = null;
-    let timeoutId = null;
-    let socket = null;
-    let reject;
-    let resolve;
-    let deploymentId = null;
-    let isDone = false;
+function makeYamlDoc(fluxfile, fileName) {
+    const YAML = require("yaml");
+    const YAMLSourceMap = require("yaml-source-map");
 
-    function makeYamlDoc() {
-        const YAML = require("yaml");
-        const YAMLSourceMap = require("yaml-source-map");
+    const sourceMap = new YAMLSourceMap();
+    const document = sourceMap.index(
+        YAML.parseDocument(fluxfile, { keepCstNodes: true }),
+        { filename: fileName }
+    );
 
-        const sourceMap = new YAMLSourceMap();
-        const document = sourceMap.index(
-            YAML.parseDocument(fluxfile, { keepCstNodes: true }),
-            { filename: file }
-        );
+    return { sourceMap, document };
+}
 
-        return { sourceMap, document };
+class ProgressReporter {
+    constructor() {
+        this.lastStep = null;
+        this.lastStepProgress = null;
+        this.lastSubStepProgress = null;
+        this.lastHeader = null;
     }
 
-    function hookUpSocket() {
-        const wsEndpoint = wsJoin(endpoint, "/back/ws/deploy/");
-        socket = new ws(wsEndpoint);
-
-        socket.on("open", function open() {
-            if (!deploymentId) {
-                socket.send(
-                    JSON.stringify({
-                        action: "deploy",
-                        token,
-                        branch,
-                        fluxfile,
-                    })
-                );
-            } else {
-                socket.send(
-                    JSON.stringify({
-                        action: "follow",
-                        token,
-                        deployment_id: deploymentId,
-                    })
-                );
-            }
-        });
-
-        socket.on("message", function incoming(data) {
-            const message = JSON.parse(data);
-
-            if (message.type === "update") {
-                if (message.data.step !== lastStep) {
-                    if (lastStep) {
-                        core.endGroup();
-                    }
-
-                    core.startGroup(message.data.step);
-                    displayHeader(1, message.data.step);
-                    lastStep = message.data.step;
-                }
-
-                if (message.data.progress.step !== lastStepProgress) {
-                    displayProgressBar(
-                        "Step progress",
-                        message.data.progress.step
-                    );
-                    lastStepProgress = message.data.progress.step;
-                }
-
-                if (message.data.progress.sub_step !== lastSubStepProgress) {
-                    displayProgressBar(
-                        "Sub-step progress",
-                        message.data.progress.sub_step
-                    );
-                    lastSubStepProgress = message.data.progress.sub_step;
-                }
-
-                for (const [component, logs] of Object.entries(
-                    message.data.logs
-                )) {
-                    const buf = Buffer.from(logs, "base64");
-                    displayHeader(2, component);
-                    fs.writeSync(process.stdout.fd, buf, 0, buf.length);
-                }
-
-                if (message.data.is_done) {
-                    clearTimeout(timeoutId);
-                    isDone = true;
-                    socket.close();
-                    socket = null;
-                    resolve(message.data.status === "success");
-                    core.endGroup();
-                }
-            } else if (message.type === "set_id") {
-                deploymentId = message.data.deployment_id;
-            } else if (message.type === "error") {
-                const { error, details } = message;
-
-                if (error) {
-                    console.log(colors.white.bgRed.bold(error));
-                }
-
-                if (details && details.length) {
-                    const { sourceMap, document } = makeYamlDoc();
-
-                    for (const { message, path } of details) {
-                        const loc = sourceMap.lookup(path, document);
-                        core.error(message, {
-                            title: "Fluxfile",
-                            startLine: loc.start.line,
-                            endLine: loc.end.line,
-                            startColumn: loc.start.col,
-                            endColumn: loc.end.col,
-                        });
-                    }
-                }
-
-                isDone = true;
-                clearTimeout(timeoutId);
+    report(msg) {
+        if (this.lastStep !== msg.data.step) {
+            if (this.lastStep) {
                 core.endGroup();
-                socket.close();
-                socket = null;
-
-                const throwErr = new Error(error | "Could not deploy");
-                throwErr.noDisplay = true;
-                reject(throwErr);
-            }
-        });
-
-        socket.on("error", function error(err) {
-            reject(err);
-        });
-
-        socket.on("close", function () {
-            if (!isDone) {
-                console.log(
-                    `\x1b[31m\x1b[1mSocket closed, reconnecting\x1b[0m`
-                );
-
-                setTimeout(() => {
-                    hookUpSocket();
-                }, 1000);
-            }
-        });
-    }
-
-    return new Promise((_resolve, _reject) => {
-        resolve = _resolve;
-        reject = _reject;
-
-        timeoutId = setTimeout(() => {
-            console.log(
-                `\x1b[31m\x1b[1mTimeout after ${Math.round(
-                    timeout / 60000
-                )} minutes.\x1b[0m`
-            );
-
-            if (socket) {
-                socket.close();
-                socket = null;
             }
 
-            reject(new Error("Timeout"));
-        }, timeout * 1000);
-
-        try {
-            fluxfile = fs.readFileSync(file, "utf-8");
-        } catch (e) {
-            console.log(`\x1b[31m\x1b[1mError reading file ${file}.\x1b[0m`);
-            return reject(e);
+            core.startGroup(msg.data.step);
+            displayHeader(1, msg.data.step);
+            this.lastStep = msg.data.step;
         }
 
-        hookUpSocket();
+        if (msg.data.progress.step !== this.lastStepProgress) {
+            displayProgressBar("Step progress", msg.data.progress.step);
+            this.lastStepProgress = msg.data.progress.step;
+        }
+
+        if (msg.data.progress.sub_step !== this.lastSubStepProgress) {
+            displayProgressBar("Sub-step progress", msg.data.progress.sub_step);
+            this.lastSubStepProgress = msg.data.progress.sub_step;
+        }
+
+        for (const [component, logs] of Object.entries(msg.data.logs)) {
+            if (this.lastHeader !== component) {
+                displayHeader(2, component);
+                this.lastHeader = component;
+            }
+
+            const buf = Buffer.from(logs, "base64");
+            fs.writeSync(process.stdout.fd, buf, 0, buf.length);
+        }
+    }
+}
+
+function reportError(msg, fluxfile, fileName) {
+    const { error, details } = msg;
+
+    if (error) {
+        console.log(colors.white.bgRed.bold(error));
+    }
+
+    if (details && details.length) {
+        const { sourceMap, document } = makeYamlDoc(fluxfile, fileName);
+
+        for (const { message, path } of details) {
+            const loc = sourceMap.lookup(path, document);
+            core.error(message, {
+                title: "Fluxfile",
+                startLine: loc.start.line,
+                endLine: loc.end.line,
+                startColumn: loc.start.col,
+                endColumn: loc.end.col,
+            });
+        }
+    }
+
+    throw new Error(error || "Could not deploy");
+}
+
+async function innerDeploy({ endpoint, token, file, branch }) {
+    const fluxfile = readFluxFile(file);
+
+    let deploymentId = null;
+    let cursors = null;
+
+    const reporter = new ProgressReporter();
+    const sock = new PromSock("/back/ws/deploy/", {
+        baseUrl: endpoint,
+        onRestore() {
+            if (!deploymentId) {
+                sock.send({
+                    action: "deploy",
+                    token,
+                    branch,
+                    fluxfile,
+                });
+            } else {
+                sock.send({
+                    action: "follow",
+                    token,
+                    deployment_id: deploymentId,
+                    cursors,
+                });
+            }
+        },
     });
+
+    try {
+        sock.connect();
+        let msg;
+
+        while ((msg = await sock.nextMessage())) {
+            if (msg.type === "update") {
+                reporter.report(msg);
+
+                if (msg.data.cursors) {
+                    cursors = msg.data.cursors;
+                }
+
+                if (msg.data.is_done) {
+                    return;
+                }
+            } else if (msg.type === "set_id") {
+                deploymentId = msg.data.deployment_id;
+            } else if (msg.type === "error") {
+                reportError(msg, fluxfile, file);
+            }
+        }
+    } finally {
+        sock.close();
+    }
+}
+
+function deploy({ endpoint, token, file, branch, timeout }) {
+    return runBefore(
+        timeout * 1000,
+        innerDeploy({ endpoint, token, file, branch })
+    );
 }
 
 module.exports = deploy;

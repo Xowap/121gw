@@ -9,6 +9,8 @@ async function run() {
         branch = github.context.ref.replace("refs/heads/", "");
     }
 
+    let ret = 1;
+
     try {
         await deploy({
             endpoint: core.getInput("endpoint"),
@@ -17,9 +19,13 @@ async function run() {
             timeout: parseInt(core.getInput("timeout"), 10),
             branch: branch,
         });
+
+        ret = 0;
     } catch (error) {
-        core.setFailed(error.message);
+        core.setFailed(error);
     }
+
+    process.exit(ret);
 }
 
 run().then();

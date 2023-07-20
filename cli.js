@@ -34,6 +34,8 @@ async function main() {
         process.exit(1);
     }
 
+    let ret = 1;
+
     try {
         await deploy({
             endpoint: FLUX_ENDPOINT,
@@ -42,13 +44,15 @@ async function main() {
             timeout: argv.timeout,
             branch: argv.branch,
         });
+
+        ret = 0;
     } catch (error) {
         if (!error.noDisplay) {
             console.error(error);
         }
-
-        process.exit(1);
     }
+
+    process.exit(ret);
 }
 
 main().then();

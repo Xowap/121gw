@@ -35,7 +35,7 @@
     "yargs": "^17.7.2"
   },
   "devDependencies": {
-    "@vercel/ncc": "^0.36.1",
+    "@vercel/ncc": "^0.38.0",
     "eslint": "8.x",
     "jest": "29.x"
   }

@@ -6,6 +6,11 @@ const argv = require("yargs/yargs")(process.argv.slice(2))
         description: "Branch to deploy",
         type: "string",
     })
+    .option("commit", {
+        alias: "c",
+        description: "SHA of the deployed commit",
+        type: "string",
+    })
     .option("file", {
         alias: "f",
         description: "Fluxfile to use",
@@ -43,6 +48,7 @@ async function main() {
             file: argv.file,
             timeout: argv.timeout,
             branch: argv.branch,
+            commit: argv.commit,
         });
 
         ret = 0;

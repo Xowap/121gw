@@ -146,7 +146,7 @@ function reportError(msg, fluxfile, fileName) {
     throw new Error(error || "Could not deploy");
 }
 
-async function innerDeploy({ endpoint, token, file, branch }) {
+async function innerDeploy({ endpoint, token, file, branch, commit }) {
     const fluxfile = readFluxFile(file);
 
     let deploymentId = null;
@@ -161,6 +161,7 @@ async function innerDeploy({ endpoint, token, file, branch }) {
                     action: "deploy",
                     token,
                     branch,
+                    commit,
                     fluxfile,
                 });
             } else {
@@ -200,10 +201,10 @@ async function innerDeploy({ endpoint, token, file, branch }) {
     }
 }
 
-function deploy({ endpoint, token, file, branch, timeout }) {
+function deploy({ endpoint, token, file, branch, commit, timeout }) {
     return runBefore(
         timeout * 1000,
-        innerDeploy({ endpoint, token, file, branch })
+        innerDeploy({ endpoint, token, file, branch, commit })
     );
 }
 

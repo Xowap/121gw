@@ -18,6 +18,7 @@ async function run() {
             file: core.getInput("file"),
             timeout: parseInt(core.getInput("timeout"), 10),
             branch: branch,
+            commit: github.context.sha,
         });
 
         ret = 0;

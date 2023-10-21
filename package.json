@@ -26,7 +26,7 @@
   "homepage": "https://github.com/actions/javascript-action#readme",
   "dependencies": {
     "@actions/core": "1.x",
-    "@actions/github": "5.x",
+    "@actions/github": "6.x",
     "colors": "^1.4.0",
     "prettier": "3.x",
     "ws": "^8.13.0",

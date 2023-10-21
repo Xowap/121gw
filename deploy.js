@@ -25,7 +25,7 @@ function createProgressBar(percentage, length = 50) {
  * @param progress
  */
 function displayProgressBar(label, progress) {
-    console.log(
+    log(
         colors.blue.bold(label.padEnd(20, " ") + ":") +
             colors.green(
                 `${createProgressBar(progress)} ${Math.round(progress * 100)}%`
@@ -46,11 +46,11 @@ function displayHeader(level, text) {
         level === 1 ? level1Chars : level2Chars;
     const colorFunc = level === 1 ? colors.yellow.bold : colors.cyan.bold;
 
-    console.log("");
-    console.log(colorFunc(` ${startChar}${lineChar.repeat(3)}`));
-    console.log(colorFunc(` ${textChar} ${text}`));
-    console.log(colorFunc(` ${endChar}${lineChar.repeat(3)}`));
-    console.log("");
+    log("");
+    log(colorFunc(` ${startChar}${lineChar.repeat(3)}`));
+    log(colorFunc(` ${textChar} ${text}`));
+    log(colorFunc(` ${endChar}${lineChar.repeat(3)}`));
+    log("");
 }
 
 function readFluxFile(file) {
@@ -68,6 +68,16 @@ function makeYamlDoc(fluxfile, fileName) {
     );
 
     return { sourceMap, document };
+}
+
+/**
+ * Kind of a mock of log, but it writes directly to stdout (without
+ * buffering).
+ */
+function log(...args) {
+    const message = args.join(" ") + "\n";
+    const buffer = Buffer.from(message);
+    fs.writeSync(process.stdout.fd, buffer, 0, buffer.length);
 }
 
 class ProgressReporter {
@@ -115,7 +125,7 @@ function reportError(msg, fluxfile, fileName) {
     const { error, details } = msg;
 
     if (error) {
-        console.log(colors.white.bgRed.bold(error));
+        log(colors.white.bgRed.bold(error));
     }
 
     if (details && details.length) {
@@ -136,7 +146,7 @@ function reportError(msg, fluxfile, fileName) {
     throw new Error(error || "Could not deploy");
 }
 
-async function innerDeploy({ endpoint, token, file, branch }) {
+async function innerDeploy({ endpoint, token, file, branch, commit }) {
     const fluxfile = readFluxFile(file);
 
     let deploymentId = null;
@@ -148,9 +158,11 @@ async function innerDeploy({ endpoint, token, file, branch }) {
         onRestore() {
             if (!deploymentId) {
                 sock.send({
+                    meta: { version: 2 },
                     action: "deploy",
                     token,
                     branch,
+                    commit,
                     fluxfile,
                 });
             } else {
@@ -190,10 +202,10 @@ async function innerDeploy({ endpoint, token, file, branch }) {
     }
 }
 
-function deploy({ endpoint, token, file, branch, timeout }) {
+function deploy({ endpoint, token, file, branch, commit, timeout }) {
     return runBefore(
         timeout * 1000,
-        innerDeploy({ endpoint, token, file, branch })
+        innerDeploy({ endpoint, token, file, branch, commit })
     );
 }
 

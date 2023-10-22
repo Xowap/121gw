@@ -31,4 +31,8 @@ async function run() {
     process.exit(ret);
 }
 
+console.log("crash crash burn");
+
+process.exit(1);
+
 run().then();

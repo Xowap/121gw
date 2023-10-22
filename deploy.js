@@ -158,7 +158,6 @@ async function innerDeploy({ endpoint, token, file, branch, commit }) {
         onRestore() {
             if (!deploymentId) {
                 sock.send({
-                    meta: { version: 2 },
                     action: "deploy",
                     token,
                     branch,

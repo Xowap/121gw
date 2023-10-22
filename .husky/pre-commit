@@ -1,0 +1,28 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+bun run lint
+
+# Create temporary directory
+temp_dir=$(mktemp -d)
+trap "rm -rf $temp_dir" EXIT
+
+# Build using ncc
+ncc build index.js -o $temp_dir --source-map --license licenses.txt
+echo
+
+# Compare files
+if cmp -s "$temp_dir/index.js" "$(dirname -- "$0")/../dist/index.js"; then
+    tput setaf 2; echo "Compilation verified."; tput sgr0
+else
+    tput setaf 1; echo "Compilation mismatch. Blocking commit."; tput sgr0
+    exit 1
+fi
+
+# Don't allow unstaged changes in dist/
+if git diff --name-only | grep -qE "^dist/"; then
+    tput setaf 1; echo "Dist changes are not staged. Blocking commit."; tput sgr0
+    exit 1
+else
+    tput setaf 2; echo "Dist changes staged."; tput sgr0
+fi

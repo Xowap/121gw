@@ -12,16 +12,14 @@ async function run() {
     let ret = 1;
 
     try {
-        const context = {
+        await deploy({
             endpoint: core.getInput("endpoint"),
             token: core.getInput("token"),
             file: core.getInput("file"),
             timeout: parseInt(core.getInput("timeout"), 10),
             branch: branch,
             commit: github.context.sha,
-        };
-        console.log(context);
-        await deploy(context);
+        });
 
         ret = 0;
     } catch (error) {

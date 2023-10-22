@@ -30,13 +30,13 @@
     "@actions/github": "6.x",
     "colors": "^1.4.0",
     "prettier": "3.x",
-    "ws": "^8.13.0",
+    "ws": "^8.14.0",
     "yaml": "^1.10.2",
     "yaml-source-map": "^2.1.1",
     "yargs": "^17.7.2"
   },
   "devDependencies": {
-    "@vercel/ncc": "^0.36.1",
+    "@vercel/ncc": "^0.38.1",
     "eslint": "8.x",
     "jest": "29.x",
     "husky": "^8.0.0"

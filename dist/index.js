@@ -208,6 +208,8 @@ async function innerDeploy({ endpoint, token, file, branch, commit }) {
 }
 
 function deploy({ endpoint, token, file, branch, commit, timeout }) {
+    colors.enable();
+
     return runBefore(
         timeout * 1000,
         innerDeploy({ endpoint, token, file, branch, commit })
